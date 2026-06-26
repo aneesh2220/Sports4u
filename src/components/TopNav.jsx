@@ -7,7 +7,7 @@ export default function TopNav() {
     <header className="topnav">
       <div className="topnav__row">
         <Link to="/" className="topnav__logo">
-          ScoreLine
+          Sports4u
         </Link>
         <nav className="topnav__links">
           <Link to="/" className="topnav__link is-active">Scores</Link>
