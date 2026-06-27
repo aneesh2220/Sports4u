@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 
-const SPORTS = ['Football', 'Hockey', 'Basketball', 'Tennis', 'Cricket']
+const SPORTS = ['Cricket', 'Football', 'Tennis', 'Basketball', ]
 
 export default function TopNav() {
   return (
