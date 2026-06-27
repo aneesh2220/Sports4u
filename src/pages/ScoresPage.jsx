@@ -17,6 +17,13 @@ const FETCHERS = {
   Tomorrow: fetchUpcomingMatches,
 }
 
+// Only the live tab auto-refreshes — schedule/recent data barely changes
+// minute to minute, so polling those too would just burn API quota for
+// no visible benefit. 10s matches the backend's cache TTL for live data
+// (see TTL_MS in server/index.js / functions) — going faster than that
+// would just re-request the same cached response.
+const LIVE_POLL_MS = 10_000
+
 export default function ScoresPage() {
   const [filter, setFilter] = useState('live')
   const [groups, setGroups] = useState([])
@@ -25,23 +32,33 @@ export default function ScoresPage() {
 
   useEffect(() => {
     let mounted = true
-    setStatus('loading')
     const fetcher = FETCHERS[filter] ?? fetchRecentMatches
 
-    fetcher()
-      .then((raw) => {
-        if (!mounted) return
-        setGroups(groupMatchesBySeries(raw))
-        setStatus('ready')
-      })
-      .catch((err) => {
-        if (!mounted) return
-        console.error(err)
-        setStatus('error')
-      })
+    function load(isFirstLoad) {
+      if (isFirstLoad) setStatus('loading')
+      fetcher()
+        .then((raw) => {
+          if (!mounted) return
+          setGroups(groupMatchesBySeries(raw))
+          setStatus('ready')
+        })
+        .catch((err) => {
+          if (!mounted) return
+          console.error(err)
+          setStatus('error')
+        })
+    }
+
+    load(true)
+
+    let interval
+    if (filter === 'live') {
+      interval = setInterval(() => load(false), LIVE_POLL_MS)
+    }
 
     return () => {
       mounted = false
+      if (interval) clearInterval(interval)
     }
   }, [filter])
 

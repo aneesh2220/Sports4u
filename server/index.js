@@ -17,12 +17,13 @@ if (!RAPIDAPI_KEY || RAPIDAPI_KEY === 'paste_your_key_here') {
 }
 
 // Tiny in-memory cache so a page full of users doesn't multiply your RapidAPI hits.
+// TTL is per-route below: short for live (since the frontend polls it every 10s),
+// longer for things that barely change minute to minute.
 const cache = new Map()
-const TTL_MS = 30_000 // 30s — live data stays reasonably fresh without burning quota
 
-async function cachedFetch(path) {
+async function cachedFetch(path, ttlMs) {
   const cached = cache.get(path)
-  if (cached && Date.now() - cached.at < TTL_MS) {
+  if (cached && Date.now() - cached.at < ttlMs) {
     return cached.data
   }
 
@@ -43,10 +44,10 @@ async function cachedFetch(path) {
   return data
 }
 
-function handle(path) {
+function handle(path, ttlMs = 30_000) {
   return async (req, res) => {
     try {
-      const data = await cachedFetch(path)
+      const data = await cachedFetch(path, ttlMs)
       res.json(data)
     } catch (err) {
       console.error(`Failed fetching ${path}:`, err.message)
@@ -55,17 +56,17 @@ function handle(path) {
   }
 }
 
-app.get('/api/matches/recent', handle('/matches/v1/recent'))
-app.get('/api/matches/live', handle('/matches/v1/live'))
-app.get('/api/matches/upcoming', handle('/matches/v1/upcoming'))
-app.get('/api/schedule', handle('/schedule/v1/international'))
+app.get('/api/matches/recent', handle('/matches/v1/recent', 60_000))
+app.get('/api/matches/live', handle('/matches/v1/live', 10_000))
+app.get('/api/matches/upcoming', handle('/matches/v1/upcoming', 120_000))
+app.get('/api/schedule', handle('/schedule/v1/international', 300_000))
 
 app.get('/api/scorecard/:matchId', (req, res) =>
-  handle(`/mcenter/v1/${req.params.matchId}/scard`)(req, res),
+  handle(`/mcenter/v1/${req.params.matchId}/scard`, 10_000)(req, res),
 )
 
 app.get('/api/series/:seriesId', (req, res) =>
-  handle(`/series/v1/${req.params.seriesId}`)(req, res),
+  handle(`/series/v1/${req.params.seriesId}`, 60_000)(req, res),
 )
 
 app.listen(PORT, () => {

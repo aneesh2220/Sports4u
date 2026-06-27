@@ -1,30 +1,48 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ChevronLeft } from 'lucide-react'
 import { fetchScorecard } from '../api/cricbuzz.js'
 import TopNav from '../components/TopNav.jsx'
 
+// Matches the backend's 10s cache TTL for the scorecard route — polling
+// faster than that would just re-request the same cached response.
+const SCORECARD_POLL_MS = 10_000
+
 export default function MatchPage() {
   const { id } = useParams()
   const [data, setData] = useState(null)
   const [status, setStatus] = useState('loading')
+  const isCompleteRef = useRef(false)
 
   useEffect(() => {
     let mounted = true
-    setStatus('loading')
-    fetchScorecard(id)
-      .then((raw) => {
-        if (!mounted) return
-        setData(raw)
-        setStatus('ready')
-      })
-      .catch((err) => {
-        if (!mounted) return
-        console.error(err)
-        setStatus('error')
-      })
+    isCompleteRef.current = false
+
+    function load(isFirstLoad) {
+      if (isFirstLoad) setStatus('loading')
+      fetchScorecard(id)
+        .then((raw) => {
+          if (!mounted) return
+          setData(raw)
+          isCompleteRef.current = Boolean(raw?.ismatchcomplete)
+          setStatus('ready')
+        })
+        .catch((err) => {
+          if (!mounted) return
+          console.error(err)
+          setStatus('error')
+        })
+    }
+
+    load(true)
+    // Stops polling once the match is complete — no point refreshing a final scorecard.
+    const interval = setInterval(() => {
+      if (!isCompleteRef.current) load(false)
+    }, SCORECARD_POLL_MS)
+
     return () => {
       mounted = false
+      clearInterval(interval)
     }
   }, [id])
 
